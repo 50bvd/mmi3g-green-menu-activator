@@ -1,0 +1,23 @@
+# Database backups created during script execution
+DB/efs-persist/old/*.db
+DB/efs-persist/process/*.db
+DB/efs-persist/new/*.db
+DB/HBpersistence/old/*.db
+DB/HBpersistence/process/*.db
+DB/HBpersistence/new/*.db
+DB/hmisql/old/*.db
+DB/hmisql/process/*.db
+DB/hmisql/new/*.db
+
+# Log files generated on SD card
+*.log
+.started
+.done
+
+# macOS
+.DS_Store
+._*
+
+# Windows
+Thumbs.db
+desktop.ini
