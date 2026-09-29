@@ -1,0 +1,47 @@
+name: Bug report
+description: The script did not work as described
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! Please remove your VIN and any personal data
+        from the log before pasting it.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Which screen appeared, what you expected instead.
+      placeholder: After pressing the knob, the error screen appeared ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Script version
+      description: First lines of green_menu_activator.log (e.g. 1.1.0)
+    validations:
+      required: true
+  - type: input
+    id: car
+    attributes:
+      label: Car and MMI
+      placeholder: e.g. Audi A5 8T 2011, MMI 3G High
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware
+      description: "Firmware: line of the log, or SETUP › Version information"
+      placeholder: e.g. HNav_EU_K0942_4
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: green_menu_activator.log
+      description: Paste the whole log from the SD card.
+      render: text
+    validations:
+      required: true

@@ -1,0 +1,61 @@
+name: CI
+
+# Fast checks on every pull request and on the long-lived branches:
+# ShellCheck, the simulated MMI tests and the SD card payload.
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # run.sh runs under the QNX Korn shell, the tools under bash
+      - name: ShellCheck
+        run: |
+          shellcheck -s ksh sdcard/run.sh
+          shellcheck tests/*.sh scripts/*.sh
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install mksh and sqlite3
+        run: sudo apt-get update -q && sudo apt-get install -y -q mksh sqlite3
+
+      # mksh is the closest shell to the QNX 6 Korn shell (pdksh)
+      - name: Simulated MMI (mksh)
+        run: tests/run_test.sh
+
+      - name: Payload checks
+        run: tests/payload_test.sh
+
+      - name: Build the release ZIP
+        run: scripts/package.sh dist
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sdcard
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 14
