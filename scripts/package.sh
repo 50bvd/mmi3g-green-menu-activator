@@ -5,6 +5,8 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT=${1:-$ROOT/dist}
+mkdir -p "$OUT"
+OUT=$(cd "$OUT" && pwd)
 VERSION=$(sed -n 's/^VERSION=//p' "$ROOT/sdcard/run.sh")
 NAME=mmi3g-green-menu-activator-$VERSION.zip
 
@@ -17,7 +19,6 @@ rm -rf "$STAGE/backup" "$STAGE"/*.log "$STAGE"/DISABLE*
 
 # Same bytes for the same sources: fixed dates, sorted entries, no extra fields
 find "$STAGE" -exec touch -h -d '2000-01-01 00:00:00' {} +
-mkdir -p "$OUT"
 rm -f "$OUT/$NAME"
 (cd "$STAGE" && find . -type f | sed 's#^\./##' | LC_ALL=C sort | zip -q -X -@ "$OUT/$NAME")
 
