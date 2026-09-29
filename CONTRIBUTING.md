@@ -77,8 +77,9 @@ Types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `chore`, `ci`.
 
 1. Update `VERSION` in `sdcard/run.sh` and move the `Unreleased` notes of `CHANGELOG.md` to the new version.
 2. Merge `develop` into `main` with a pull request "Release x.y.z".
-3. Tag `main` with `vx.y.z` and push the tag: the release workflow builds the ZIP, `SHA256SUMS.txt`
-   and the provenance attestation, and uses the changelog section as the release description.
+3. **Actions › Release › Run workflow** on `main` with the tag `vx.y.z` (or push that tag): the
+   workflow creates the tag, builds the ZIP, `SHA256SUMS.txt` and the provenance attestation, and
+   uses the changelog section as the release description.
 
 ## Compatibility reports
 
