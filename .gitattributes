@@ -1,0 +1,11 @@
+# Normalize line endings in the repository
+* text=auto eol=lf
+
+# The MMI's Korn shell does not accept CRLF: scripts stay LF on every platform
+*.sh text eol=lf
+sdcard/upd -text
+
+# Payload copied as is to the SD card: never convert these files
+sdcard/copie_scr.sh binary
+sdcard/utils/* binary
+*.png binary

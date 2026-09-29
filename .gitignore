@@ -1,18 +1,11 @@
-# Database backups created during script execution
-DB/efs-persist/old/*.db
-DB/efs-persist/process/*.db
-DB/efs-persist/new/*.db
-DB/HBpersistence/old/*.db
-DB/HBpersistence/process/*.db
-DB/HBpersistence/new/*.db
-DB/hmisql/old/*.db
-DB/hmisql/process/*.db
-DB/hmisql/new/*.db
+# Files written to the SD card by the script (if you run it from a clone)
+sdcard/backup/
+sdcard/*.log
+sdcard/DISABLE
+sdcard/DISABLE.txt
 
-# Log files generated on SD card
-*.log
-.started
-.done
+# Release packages built by scripts/package.sh
+dist/
 
 # macOS
 .DS_Store
