@@ -12,7 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - **Error screen** (`screens/scriptError.png`): shown when something went wrong, instead of the "Script applied" screen.
 - **Switch the menu off**: put an empty file named `DISABLE` (or `DISABLE.txt`) at the root of the SD card and run the script again.
 - The result (`RESULT: OK` or `RESULT: FAILED`) and the script version are written to the log.
-- Tests that run the script on a simulated MMI (`tests/run_test.sh`), payload checks with pinned SHA-256 for the launcher and the QNX tools (`tests/payload_test.sh`), ShellCheck, CI and a release workflow that publishes the ZIP with `SHA256SUMS.txt` and a signed build provenance attestation.
+- Tests that run the script on a simulated MMI (`tests/run_test.sh`), payload checks with pinned SHA-256 for the launcher and the QNX tools (`tests/payload_test.sh`), ShellCheck, CI and a release workflow (tag push or **Run workflow** in the Actions tab) that publishes the ZIP with `SHA256SUMS.txt` and a signed build provenance attestation.
 - Repository files shared with the other 50bvd projects: security policy, contribution guide, code of conduct, issue and pull request templates, branch rulesets, `.editorconfig`, `.gitattributes`.
 
 ### Changed

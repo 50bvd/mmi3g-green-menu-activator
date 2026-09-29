@@ -1,10 +1,22 @@
 name: Release
 
-# Pushing a tag vX.Y.Z builds the SD card ZIP and publishes the GitHub release.
+# - tag vX.Y.Z        -> GitHub release with the SD card ZIP
+# - tag vX.Y.Z-beta.N -> GitHub pre-release
+# - "Run workflow" (Actions tab) with a tag -> same as pushing that tag, from
+#   the selected branch (no git command needed): the tag is created on it
 # The tag must match VERSION in sdcard/run.sh.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version to publish, e.g. v1.1.0 or v1.2.0-beta.1 (must match VERSION in sdcard/run.sh)'
+        required: true
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -25,9 +37,19 @@ jobs:
 
       - name: Check the version
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           VERSION=$(sed -n 's/^VERSION=//p' sdcard/run.sh)
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::$TAG is not a version tag (vX.Y.Z or vX.Y.Z-beta.N)"
+            exit 1
+          fi
+          # a final release is only published from main
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$GITHUB_REF" != "refs/heads/main" ] \
+             && ! printf '%s' "$TAG" | grep -q -- '-'; then
+            echo "::error::Run the workflow from main to publish $TAG"
+            exit 1
+          fi
           if [ "v$VERSION" != "$TAG" ]; then
             echo "::error::Tag $TAG does not match VERSION=$VERSION in sdcard/run.sh"
             exit 1
@@ -51,7 +73,7 @@ jobs:
       - name: Release notes
         id: notes
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           VERSION="${TAG#v}"
           awk -v v="$VERSION" '
@@ -76,7 +98,7 @@ jobs:
 
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ inputs.tag || github.ref_name }}
           target_commitish: ${{ github.sha }}
           files: artifacts/*
           prerelease: ${{ contains(github.ref_name, '-') }}
