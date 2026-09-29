@@ -1,0 +1,84 @@
+name: Release
+
+# Pushing a tag vX.Y.Z builds the SD card ZIP and publishes the GitHub release.
+# The tag must match VERSION in sdcard/run.sh.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Publish GitHub release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write     # Sigstore signing of the provenance attestation
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION=$(sed -n 's/^VERSION=//p' sdcard/run.sh)
+          if [ "v$VERSION" != "$TAG" ]; then
+            echo "::error::Tag $TAG does not match VERSION=$VERSION in sdcard/run.sh"
+            exit 1
+          fi
+
+      - name: Tests
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q mksh sqlite3
+          tests/run_test.sh
+          tests/payload_test.sh
+
+      - name: Build the release ZIP
+        run: scripts/package.sh artifacts
+
+      - name: Compute SHA-256 checksums
+        run: |
+          (cd artifacts && sha256sum -- *.zip > SHA256SUMS.txt)
+          cat artifacts/SHA256SUMS.txt
+
+      # The release description is the version's section of CHANGELOG.md
+      - name: Release notes
+        id: notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          awk -v v="$VERSION" '
+            /^## \[/ { if (found) exit; if (index($0, "## [" v "]") == 1) { found = 1; next } }
+            /^\[[^]]+\]: / { if (found) exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if grep -q '[^[:space:]]' release-notes.md; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::No CHANGELOG.md section for $VERSION: using generated release notes"
+          fi
+          cat release-notes.md
+
+      # Signed statement (Sigstore) that the ZIP was built by this repository's
+      # workflow from this exact commit. Verify with:
+      #   gh attestation verify <file> --repo 50bvd/mmi3g-green-menu-activator
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: 'artifacts/*.zip'
+
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: ${{ github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          files: artifacts/*
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body_path: ${{ steps.notes.outputs.found == 'true' && 'release-notes.md' || '' }}
+          generate_release_notes: ${{ steps.notes.outputs.found != 'true' }}

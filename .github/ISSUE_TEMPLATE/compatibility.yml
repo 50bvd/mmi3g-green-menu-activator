@@ -1,0 +1,43 @@
+name: Compatibility report
+description: Tell us on which car and firmware the script worked (or not)
+labels: ["compatibility"]
+body:
+  - type: input
+    id: car
+    attributes:
+      label: Car
+      placeholder: e.g. Audi Q5 8R 2012
+    validations:
+      required: true
+  - type: dropdown
+    id: variant
+    attributes:
+      label: MMI variant
+      options:
+        - MMI 3G Basic
+        - MMI 3G High
+        - MMI 3G Plus
+        - I don't know
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware
+      description: "Firmware: line of green_menu_activator.log"
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Did the Green Menu open after the restart?
+      options:
+        - "Yes"
+        - "No"
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: green_menu_activator.log
+      render: text
