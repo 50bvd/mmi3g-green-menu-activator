@@ -10,8 +10,9 @@ Activates the hidden **Green Engineering Menu (GEM)** of Audi MMI 3G units from 
 
 - 💾 **SD card only** — insert the card, press the knob, restart the MMI
 - 🛟 **Checked backups** — every database is copied to the SD card and verified before it is changed; the first backup is never overwritten
-- ⚛️ **All or nothing** — the change is a single SQL transaction, read back afterwards
-- 🎯 **Minimal change** — one row (`namespace 4`, `key 4100`), the same flag VCDS/ODIS sets in control unit 5F
+- 🧪 **Test mode** — an empty `DRYRUN` file checks everything on your car and changes nothing
+- 🎯 **Minimal change** — only the existing record (`namespace 4`, `key 4100`) is updated, the same flag VCDS/ODIS sets in control unit 5F; the same method as [DrGER2's reference script](https://github.com/DrGER2/MMI3G-GEM-Enable)
+- ⚛️ **All or nothing** — one SQL statement, read back afterwards
 - 🔁 **Safe to run twice** — a database that is already set is left untouched
 - 🔙 **Reversible** — an empty `DISABLE` file on the card switches the menu off again
 - 📝 **Log file** on the SD card, with a clear `RESULT: OK` / `RESULT: FAILED`
@@ -29,13 +30,13 @@ The ZIP is built by GitHub Actions from this repository and comes with a signed 
 
 ```bash
 # Proves the file was built by this repository's release workflow
-gh attestation verify mmi3g-green-menu-activator-1.1.0.zip --repo 50bvd/mmi3g-green-menu-activator
+gh attestation verify mmi3g-green-menu-activator-1.2.0.zip --repo 50bvd/mmi3g-green-menu-activator
 
 # Checks the file was not corrupted or modified
 sha256sum -c SHA256SUMS.txt --ignore-missing
 ```
 
-On Windows (PowerShell): `Get-FileHash .\mmi3g-green-menu-activator-1.1.0.zip` and compare with `SHA256SUMS.txt`.
+On Windows (PowerShell): `Get-FileHash .\mmi3g-green-menu-activator-1.2.0.zip` and compare with `SHA256SUMS.txt`.
 
 ## 🚗 Compatibility
 
@@ -71,29 +72,35 @@ Also good to know:
 
 ## 🚀 Quick Start
 
-1. Format an **SD card** (full size, 8–32 GB) as **FAT32**. Avoid microSD adapters: some MMIs do not read them reliably.
+1. Format an **SD card** (full size, **SDHC 8–32 GB**) as **FAT32**. 64 GB+ cards (SDXC, exFAT) are usually not read by the MMI 3G. Avoid microSD adapters: some MMIs do not read them reliably.
 2. Extract the release ZIP **to the root** of the card:
    ```
    SD:/
    ├── copie_scr.sh     ← encrypted launcher, started by the MMI (do not edit)
    ├── run.sh           ← the script
    ├── upd              ← empty file, keep it
-   ├── screens/         ← start, done and error screens
+   ├── screens/         ← start, done, test and error screens
    └── utils/           ← QNX tools (sqlite3, showScreen, …)
    ```
-3. Prepare the car (see [the guidelines](#-before-you-start-audi-workshop-guidelines)) and wait until the MMI has fully booted.
-4. Insert the card in **slot SD1**.
-5. *Press any key to execute the script* appears → **press the rotary knob**. Nothing is changed before this.
-6. *Script applied* appears → press a key and **remove the card**.
+3. **First time: create an empty file named `DRYRUN`** at the root of the card (see [Test mode](#test-mode-dryrun)). Recommended.
+4. Prepare the car (see [the guidelines](#-before-you-start-audi-workshop-guidelines)) and wait until the MMI has fully booted.
+5. Insert the card in **slot SD1**, with **no other card in SD2**.
+6. *Press any key to execute the script* appears → **press the rotary knob**. Nothing is changed before this.
+7. *Script applied* appears → press a key and **remove the card**.
+   With `DRYRUN`: *Test finished: nothing changed* appears. Read the log, delete `DRYRUN` and start again from step 4.
    If the **error screen** appears instead, nothing more is needed: read the log (see [Troubleshooting](#-troubleshooting)).
-7. **Restart the MMI:** hold **MENU + rotary knob + top-right soft key** for about 5 seconds.
+8. **Restart the MMI:** hold **SETUP (or MENU) + rotary knob + top-right soft key** until it restarts.
 
 ## 📖 Usage
 
 ### Open the Green Menu
 
-After the restart, hold **CAR + SETUP** for about 5 seconds.
-On some models, the combination is **CAR + BACK** (or **CAR + RETURN**).
+After the restart, hold **CAR + SETUP** for about 5–6 seconds.
+On some models, the combination is **MENU + CAR**. To leave the menu, hold **CAR + RETURN**.
+
+### Test mode (DRYRUN)
+
+Create an empty file named `DRYRUN` at the root of the SD card (`DRYRUN.txt` also works). The script then does everything except the change: it finds the databases, reads the current value, writes and checks the backups, and logs what it would change (`DRYRUN  : would set value=1`). The MMI is **not modified**. Delete `DRYRUN` to apply the change.
 
 ### Switch the menu off
 
@@ -107,22 +114,21 @@ The script appends to `green_menu_activator.log` at the root of the card:
 
 ```
 ======================================
- MMI 3G Green Menu Activator 1.1.0
+ MMI 3G Green Menu Activator 1.2.0
  https://github.com/50bvd/mmi3g-green-menu-activator
 ======================================
 Date    : Tue Sep 29 18:12:03 2026
 SD card : /mnt/sdcard10t12
-Firmware: HN+_EU_AU_K0942_4
+Firmware: HNav_EU_K0942_4
 Action  : enable (pst_namespace=4 pst_key=4100 value=1)
 
 >> efs-persist (/mnt/efs-persist/DataPST.db)
-   before  : rows=0 value=none
+   before  : rows=1 value=0
    backup  : /mnt/sdcard10t12/backup/efs-persist/DataPST.db.20260929-181203
-   after   : rows=1 value=1
+   after   : value=1
    check   : ok
 
->> HBpersistence (/HBpersistence/DataPST.db)
-   not present on this MMI, skipped
+>> hmisql (/mnt/hmisql/DataPST.db)
 ...
 RESULT: OK
 ```
@@ -140,9 +146,10 @@ Each database that is changed is copied to `backup/<name>/` on the card:
 
 | Symptom | What to do |
 |---------|------------|
-| Nothing happens when the card is inserted | Check that `copie_scr.sh` is at the **root** of a **FAT32** card, wait for a full MMI boot, try the other slot or another card. |
+| Nothing happens when the card is inserted | Check that `copie_scr.sh` is at the **root** of a **FAT32 SDHC (≤ 32 GB)** card, that no other card is in the other slot, wait for a full MMI boot, then try another card. |
 | Error screen | Open `green_menu_activator.log` and look at the lines with `ERROR`. Databases in error were **left as they were**. |
 | `no DataPST.db found` | This is not an MMI 3G (see [Compatibility](#-compatibility)). |
+| `no Green Menu record` | The database does not have the usual record: nothing was changed. Use VCDS/ODIS (5F, developer mode) instead, and please [open an issue](https://github.com/50bvd/mmi3g-green-menu-activator/issues/new?template=bug_report.yml) with the log. |
 | `attempt 3 failed` | The MMI was writing to its database. Wait a minute and run the script again. |
 | `RESULT: OK` but no menu | Make sure you restarted the MMI, then try the other key combinations. |
 
@@ -150,13 +157,17 @@ Each database that is changed is copied to `backup/<name>/` on the card:
 
 The MMI 3G runs **QNX**. When an SD card is inserted, the MMI's `proc_scriptlauncher` looks for an **encrypted** `copie_scr.sh`, decodes it and runs it. The one shipped here ([decoded copy](docs/copie_scr.sh.dec)) only changes to the SD card and starts `run.sh`.
 
-`run.sh` shows the start screen, then for each persistence database found — `/mnt/efs-persist/DataPST.db`, `/HBpersistence/DataPST.db`, `/mnt/hmisql/DataPST.db`, depending on the variant — it:
+`run.sh` shows the start screen, then for each persistence database — `/mnt/efs-persist/DataPST.db` (flash copy) and `/mnt/hmisql/DataPST.db` (HMI copy), the two changed by [DrGER2's reference script](https://github.com/DrGER2/MMI3G-GEM-Enable) — it:
 
-1. checks that the table `tb_intvalues` exists and reads the current value;
+1. checks that the table `tb_intvalues` exists and that the Green Menu record exists (it does on every production MMI, with value `0`);
 2. stops there if the value is already right;
 3. copies the database to the SD card and checks the copy (`PRAGMA integrity_check`);
-4. deletes and inserts the row `pst_namespace=4, pst_key=4100, pst_value=1` in **one transaction**;
+4. updates the record: `UPDATE tb_intvalues SET pst_value=1 WHERE pst_namespace=4 AND pst_key=4100` — no row is added or deleted, no other column is touched;
 5. reads the value back and runs `PRAGMA quick_check`.
+
+`/HBpersistence/DataPST.db` is never touched: it is not changed by the reference script and has its own checksum file (`DataPST.crc`).
+
+`sqlite3` and `showScreen` in `utils/` are the QNX tools Audi ships with MMI firmware updates; they are byte-for-byte identical to the ones in DrGER2's script.
 
 ## 🛠️ Development
 

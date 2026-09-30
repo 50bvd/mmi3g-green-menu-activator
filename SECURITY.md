@@ -7,7 +7,8 @@ so reports about anything that could damage an MMI are taken seriously.
 
 | Version | Supported |
 |---------|-----------|
-| 1.1.x | ✅ |
+| 1.2.x | ✅ |
+| 1.1.x | ❌ please upgrade |
 | 1.0.x | ❌ please upgrade (backups were not written) |
 
 ## Reporting a vulnerability
@@ -23,9 +24,10 @@ and you are credited unless you prefer otherwise.
 ## How the script protects your MMI
 
 - Nothing is changed before you confirm the start screen.
-- Only one row is written: `tb_intvalues`, namespace `4`, key `4100`. No other table or value is touched.
+- Only the existing record `tb_intvalues`, namespace `4`, key `4100` is updated, in `/mnt/efs-persist` and `/mnt/hmisql`. No row is added or deleted, no other table, column or database is touched.
 - Every database is backed up to the SD card and the backup is checked before the change.
-- The change is one SQL transaction, and it is read back afterwards.
+- The change is one SQL statement (all or nothing), and it is read back afterwards.
+- A test mode (`DRYRUN` file) checks everything without changing anything.
 - The script makes no network access and does not start any other program on the MMI.
 
 ## Verify what you run
