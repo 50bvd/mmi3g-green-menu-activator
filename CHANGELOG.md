@@ -5,6 +5,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-30
+
+Aligned on DrGER2's reference script ([MMI3G-GEM-Enable](https://github.com/DrGER2/MMI3G-GEM-Enable)), the most recent published method for MMI 3G Basic, High and Plus.
+
+### Added
+- **Test mode**: an empty `DRYRUN` (or `DRYRUN.txt`) file at the root of the SD card checks everything — databases, current value, backups — and changes nothing on the MMI. New screen `scriptDryRun.png`.
+- The SD card path can be given to `run.sh` as its first argument, as passed by the improved launchers.
+
+### Changed
+- The existing Green Menu record is **updated** (`UPDATE`) instead of deleted and inserted again: no row is added or removed and every other column is kept.
+- If the record does not exist, the database is left untouched and the error is logged, instead of adding a row.
+- `/HBpersistence/DataPST.db` is no longer changed: the reference script does not change it, and it has its own checksum file (`DataPST.crc`). Only `/mnt/efs-persist` and `/mnt/hmisql` are changed.
+- README: SD card must be SDHC (≤ 32 GB, FAT32), no card in the other slot, key combinations checked against published guides.
+
 ## [1.1.0] - 2026-09-29
 
 ### Added
@@ -34,6 +48,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ### Added
 - First release: SD card script that sets `pst_key=4100` to `1` in namespace `4` of the three `DataPST.db` locations, with a log file on the SD card.
 
-[Unreleased]: https://github.com/50bvd/mmi3g-green-menu-activator/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/50bvd/mmi3g-green-menu-activator/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/50bvd/mmi3g-green-menu-activator/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/50bvd/mmi3g-green-menu-activator/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/50bvd/mmi3g-green-menu-activator/releases/tag/v1.0.0

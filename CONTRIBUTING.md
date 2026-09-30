@@ -55,6 +55,9 @@ The script runs on a car. A mistake can leave an MMI misconfigured, so:
 - **Never change anything before the start screen**, and never change a database without a
   checked backup.
 - **Never create a file on the MMI.** A missing database is skipped.
+- **Only update the existing record.** No `INSERT`/`DELETE`, no other table, column or database
+  (`/HBpersistence` has its own checksum file). Stay aligned with
+  [DrGER2's reference script](https://github.com/DrGER2/MMI3G-GEM-Enable).
 - Every new behaviour gets a case in `tests/run_test.sh`.
 - Files for the SD card keep LF line endings (`.gitattributes` enforces it).
 

@@ -3,13 +3,15 @@
 # Audi MMI 3G - Green Engineering Menu Activator
 # https://github.com/50bvd/mmi3g-green-menu-activator
 # =============================================================================
-# Original method: Vlasoff / Keldo (2016)
+# Original method: Vlasoff / Keldo (2016); reference method: DrGER2
+# (github.com/DrGER2/MMI3G-GEM-Enable)
 # Maintained by:   Loup LIGNON KRASNIQI (50bvd) - BSD 2-Clause License
 #
 # Started by copie_scr.sh (decoded by the MMI's proc_scriptlauncher) when the
-# SD card is inserted. Sets the Green Engineering Menu flag
-# (tb_intvalues: pst_namespace=4, pst_key=4100) in every DataPST.db found,
-# the same flag VCDS/ODIS sets through control unit 5F.
+# SD card is inserted. Sets the existing Green Engineering Menu record
+# (tb_intvalues: pst_namespace=4, pst_key=4100) in the persistence databases
+# of /mnt/efs-persist and /mnt/hmisql, the same flag VCDS/ODIS sets through
+# control unit 5F. /HBpersistence is never touched (it has its own CRC file).
 #
 # Safety rules followed by this script:
 #   - nothing is changed before the start screen is confirmed;
@@ -17,28 +19,34 @@
 #   - every database is backed up to the SD card, and the backup is checked
 #     with PRAGMA integrity_check, before it is changed;
 #   - the first backup ever made (*.orig) is never overwritten;
-#   - each change is one SQL transaction (all or nothing) and is read back;
+#   - only the existing record is updated: no row is added or deleted;
+#   - each change is one SQL statement (all or nothing) and is read back;
 #   - a database that already has the right value is left untouched.
 #
-# Put an empty file named DISABLE (or DISABLE.txt) at the root of the SD card
-# to switch the menu off again (value 0) instead of on.
+# Files at the root of the SD card change what the script does:
+#   DRYRUN (or DRYRUN.txt)   test only: checks and backs up, changes nothing
+#   DISABLE (or DISABLE.txt) switches the menu off again (value 0)
 #
 # Runs under the QNX 6 Korn shell (pdksh): keep to POSIX sh features.
 # =============================================================================
 
-VERSION=1.1.0
+VERSION=1.2.0
 
 PST_NAMESPACE=4
 PST_KEY=4100
 PST_VALUE=1
 
 # --- Paths -------------------------------------------------------------------
-# copie_scr.sh changes to the SD card directory and starts ./run.sh, so the
-# directory of this script is the SD card, whichever slot it is in.
-case "$0" in
-    */*) SDPath=${0%/*} ;;
-    *)   SDPath=. ;;
-esac
+# copie_scr.sh passes the SD card mount point (e.g. /mnt/sdcard10t12) as $1.
+# Without it, the directory of this script is the SD card.
+if [ -n "$1" ] && [ -d "$1" ]; then
+    SDPath=$1
+else
+    case "$0" in
+        */*) SDPath=${0%/*} ;;
+        *)   SDPath=. ;;
+    esac
+fi
 SDPath=$(cd "$SDPath" && pwd)
 
 # GEM_* variables are only used by the tests (tests/run_test.sh). They are
@@ -50,9 +58,9 @@ SHOWSCREEN=${GEM_SHOWSCREEN:-$SDPath/utils/showScreen}
 LOG=$SDPath/green_menu_activator.log
 BACKUP=$SDPath/backup
 
-# name:path of each persistence database, depending on the MMI variant
+# name:path of the persistence databases (flash copy and HMI copy), as in
+# DrGER2's reference script
 DATABASES="efs-persist:$SYSROOT/mnt/efs-persist/DataPST.db
-HBpersistence:$SYSROOT/HBpersistence/DataPST.db
 hmisql:$SYSROOT/mnt/hmisql/DataPST.db"
 
 STAMP=$(date +%Y%m%d-%H%M%S 2>/dev/null)
@@ -90,6 +98,10 @@ finish() {
         show scriptDone.png
         exit 0
     fi
+    if [ "$1" = "DRYRUN" ]; then
+        show scriptDryRun.png
+        exit 0
+    fi
     show scriptError.png
     exit 1
 }
@@ -99,9 +111,14 @@ rows() {
     sql "$1" "SELECT count(*) FROM tb_intvalues WHERE pst_namespace=$PST_NAMESPACE AND pst_key=$PST_KEY;"
 }
 
-# value <database>: current Green Menu value (empty if there is none)
+# value <database>: current Green Menu value(s), empty if there is none
 value() {
-    sql "$1" "SELECT pst_value FROM tb_intvalues WHERE pst_namespace=$PST_NAMESPACE AND pst_key=$PST_KEY;"
+    sql "$1" "SELECT group_concat(pst_value) FROM tb_intvalues WHERE pst_namespace=$PST_NAMESPACE AND pst_key=$PST_KEY;"
+}
+
+# wrong <database>: number of Green Menu rows that do not hold PST_VALUE
+wrong() {
+    sql "$1" "SELECT count(*) FROM tb_intvalues WHERE pst_namespace=$PST_NAMESPACE AND pst_key=$PST_KEY AND pst_value<>$PST_VALUE;"
 }
 
 # backup <name> <database>: copy to the SD card and check the copy
@@ -127,17 +144,14 @@ backup() {
     return 0
 }
 
-# apply <database>: delete and insert in one transaction (all or nothing)
+# apply <database>: update the existing record (one statement, all or nothing)
 apply() {
-    sql "$1" "BEGIN;
-DELETE FROM tb_intvalues WHERE pst_namespace=$PST_NAMESPACE AND pst_key=$PST_KEY;
-INSERT INTO tb_intvalues (pst_namespace, pst_key, pst_value) VALUES ($PST_NAMESPACE, $PST_KEY, $PST_VALUE);
-COMMIT;"
+    sql "$1" "UPDATE tb_intvalues SET pst_value=$PST_VALUE WHERE pst_namespace=$PST_NAMESPACE AND pst_key=$PST_KEY;"
 }
 
 # patch_db <name> <database>: returns 0 when the database holds the right value
 patch_db() {
-    typeset name db tables count current
+    typeset name db tables count current bad
     name=$1
     db=$2
 
@@ -151,7 +165,19 @@ patch_db() {
     current=$(value "$db")
     log "   before  : rows=$count value=${current:-none}"
 
-    if [ "$count" = "1" ] && [ "$current" = "$PST_VALUE" ]; then
+    # The record exists on every production MMI (value 0). If it is missing,
+    # something is unusual: do not invent one.
+    if [ "$count" = "0" ]; then
+        log "   ERROR: no Green Menu record in this database, left untouched"
+        return 1
+    fi
+    case "$count" in
+        ''|*[!0-9]*)
+            log "   ERROR: cannot read the Green Menu record, left untouched"
+            return 1 ;;
+    esac
+
+    if [ "$(wrong "$db")" = "0" ]; then
         log "   already set, nothing to do"
         return 0
     fi
@@ -161,16 +187,21 @@ patch_db() {
         return 1
     fi
 
+    if [ "$DRYRUN" = "1" ]; then
+        log "   DRYRUN  : would set value=$PST_VALUE, nothing changed"
+        return 0
+    fi
+
     if ! apply "$db"; then
         log "   ERROR: the change was refused, database left as it was"
         return 1
     fi
 
-    count=$(rows "$db")
+    bad=$(wrong "$db")
     current=$(value "$db")
-    log "   after   : rows=$count value=${current:-none}"
+    log "   after   : value=${current:-none}"
     log "   check   : $(sql "$db" "PRAGMA quick_check;")"
-    if [ "$count" = "1" ] && [ "$current" = "$PST_VALUE" ]; then
+    if [ "$bad" = "0" ]; then
         return 0
     fi
     log "   ERROR: the value read back is wrong"
@@ -183,6 +214,11 @@ if [ -f "$SDPath/DISABLE" ] || [ -f "$SDPath/DISABLE.txt" ]; then
     ACTION="disable"
 else
     ACTION="enable"
+fi
+DRYRUN=0
+if [ -f "$SDPath/DRYRUN" ] || [ -f "$SDPath/DRYRUN.txt" ]; then
+    DRYRUN=1
+    ACTION="$ACTION (DRYRUN: test only, nothing is changed)"
 fi
 
 log "======================================"
@@ -202,8 +238,8 @@ fi
 # Asks the user to press a key: nothing has been changed before this point
 show scriptStart.png
 
-# /mnt/efs-persist is mounted read-only while the MMI runs
-mount -uw "$SYSROOT/mnt/efs-persist" 2>> "$LOG"
+# /mnt/efs-persist may be mounted read-only while the MMI runs
+[ "$DRYRUN" = "1" ] || mount -uw "$SYSROOT/mnt/efs-persist" 2>> "$LOG"
 
 found=0
 failed=0
@@ -231,6 +267,11 @@ if [ $failed -ne 0 ]; then
     finish FAILED
 fi
 
-log "Restart the MMI (hold MENU + rotary knob + top-right soft key)."
+if [ "$DRYRUN" = "1" ]; then
+    log "DRYRUN: everything checked, nothing was changed on the MMI."
+    log "Delete the DRYRUN file from the SD card to apply the change."
+    finish DRYRUN
+fi
+log "Restart the MMI (hold SETUP or MENU + rotary knob + top-right soft key)."
 [ "$ACTION" = "enable" ] && log "Then hold CAR + SETUP for about 5 seconds to open the Green Menu."
 finish OK
